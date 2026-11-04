@@ -38,15 +38,16 @@ canvas{width:100%;display:block;background:#000;touch-action:none}
 <label><input type="checkbox" id="bg"> 背景演出</label>
 <label><input type="checkbox" id="auto"> AI自動曲追加</label>
 <label><input type="checkbox" id="ana2"> プレイスタイル分析</label>
+<label>GAS API のURL(空欄ならこのブラウザ内に保存) <input id="gu" type="text" style="width:100%" placeholder="https://script.google.com/macros/s/.../exec"></label>
+<label>合言葉 <input id="gt" type="text"></label><div style="opacity:.6">URLや合言葉を変えたら、保存後にページを再読み込みしてください</div>
 <div>キーコンフィグ (押して変更) / スマホは画面タップ</div><div class="row" id="keys"></div>
 <div class="row"><button class="p" id="sback">戻る</button></div></div>
 
 <script>
 const $=s=>document.querySelector(s),DK=['ShiftLeft','KeyS','KeyD','KeyF','Space','KeyJ','KeyK','KeyL'];
 const LS=(k,v)=>{try{if(v===undefined)return JSON.parse(localStorage.getItem(k)||'null');localStorage.setItem(k,JSON.stringify(v))}catch(e){return null}};
-const GAS=typeof google!=='undefined'&&google.script&&google.script.run;
-const api=(fn,...a)=>new Promise(ok=>GAS?google.script.run.withSuccessHandler(ok).withFailureHandler(()=>ok(null))[fn](...a):ok(null));
-const S={songs:[],logs:[],fav:LS('nr_fav')||[],set:Object.assign({off:0,keys:DK.slice(),bg:1,auto:1,ana:1},LS('nr_set')||{})};
+const api=async(fn,arg)=>{const u=S.set.url;if(!u)return null;try{const r=await fetch(u,{method:'POST',headers:{'Content-Type':'text/plain'},body:JSON.stringify({fn,arg,token:S.set.token})});const j=await r.json();return j.ok?j.data:null}catch(e){return null}};
+const S={songs:[],logs:[],fav:LS('nr_fav')||[],set:Object.assign({off:0,keys:DK.slice(),bg:1,auto:1,ana:1,url:'',token:''},LS('nr_set')||{})};
 const show=id=>document.querySelectorAll('.scr').forEach(e=>e.hidden=e.id!==id);
 const rng=s=>()=>{s|=0;s=s+0x6D2B79F5|0;let t=Math.imul(s^s>>>15,1|s);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296};
 const SEC=[.12,.35,.5,.68,.8,1.01],DEN=[.3,.5,.75,1,.2,1.1],NM=['Nova','Pulse','Vortex','Aether','Quasar','Helix','Zenith'];
@@ -155,11 +156,11 @@ $('#again').onclick=()=>start(cur.song,cur.diff,cur.mode);$('#back').onclick=()=
 $('#prac').onclick=()=>start(cur.song,'PRACTICE',cur.mode,[0,...lastP.slice(1)]);
 
 /* ---------- 設定 ---------- */
-function renderSet(){$('#off').value=S.set.off;$('#bg').checked=!!S.set.bg;$('#auto').checked=!!S.set.auto;$('#ana2').checked=!!S.set.ana;
+function renderSet(){$('#off').value=S.set.off;$('#gu').value=S.set.url;$('#gt').value=S.set.token;$('#bg').checked=!!S.set.bg;$('#auto').checked=!!S.set.auto;$('#ana2').checked=!!S.set.ana;
  $('#keys').innerHTML=S.set.keys.map((k,i)=>`<button data-k="${i}">${i?i+'鍵':'SCR'}: ${k}</button>`).join('')}
 $('#keys').onclick=e=>{const i=e.target.dataset.k;if(i==null)return;e.target.textContent='…押して';const f=ev=>{ev.preventDefault();S.set.keys[i]=ev.code;removeEventListener('keydown',f,true);renderSet()};addEventListener('keydown',f,true)};
 $('#toSet').onclick=()=>{renderSet();show('set')};
-$('#sback').onclick=()=>{S.set.off=+$('#off').value||0;S.set.bg=+$('#bg').checked;S.set.auto=+$('#auto').checked;S.set.ana=+$('#ana2').checked;LS('nr_set',S.set);show('sel')};
+$('#sback').onclick=()=>{S.set.off=+$('#off').value||0;S.set.url=$('#gu').value.trim();S.set.token=$('#gt').value.trim();S.set.bg=+$('#bg').checked;S.set.auto=+$('#auto').checked;S.set.ana=+$('#ana2').checked;LS('nr_set',S.set);show('sel')};
 
 /* ---------- 起動 ---------- */
 (async()=>{S.logs=LS('nr_logs')||[];const r=await api('getSongs');S.songs=r&&r.length?r.map(JSON.parse).reverse():(LS('nr_songs')||[]);
