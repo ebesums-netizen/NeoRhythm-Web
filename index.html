@@ -21,6 +21,7 @@ canvas{width:100%;display:block;background:#000;touch-action:none}
 <details class="card"><summary><b>＋ mp3曲を登録</b></summary>
 <label>タイトル <input id="mt" type="text"></label><label>アーティスト <input id="ma" type="text"></label>
 <label>BPM <input id="mb" type="number" step="0.01" style="width:100px"></label>
+<label>曲のキー(ギターの音程用。マイナー系の曲向け) <select id="mk"><option value="0">A</option><option value="1">A#</option><option value="2">B</option><option value="3">C</option><option value="4">C#</option><option value="5">D</option><option value="6">D#</option><option value="7">E</option><option value="8">F</option><option value="9">F#</option><option value="10">G</option><option value="11">G#</option></select></label>
 <label>1拍目の位置(秒) <input id="mo" type="number" step="0.001" value="0" style="width:100px"></label>
 <label>mp3のURL(GitHub Pages推奨・保存されます) <input id="mu" type="text" style="width:100%" placeholder="audio/xxx.mp3"></label>
 <label>またはファイル選択(今回の起動中のみ) <input id="mf" type="file" accept="audio/*"></label>
@@ -65,7 +66,7 @@ function genChart(s,diff,w){const r=rng(s.seed+({NORMAL:1,HYPER:7,PRACTICE:13}[d
  for(let st=16;st*u<s.duration-2;st++){const f=st*u/s.duration,sec=secOf(f),den=DEN[sec]*d,hi=sec===3||sec===5;
   let p=st%4===0?den+.25:st%2===0?den*.6:hi?den*.35:0;if(r()>=p)continue;
   let lane;if(st%16===0&&r()<.3*d)lane=0;else{const t=w.slice(1).reduce((a,b)=>a+b,0);let x=r()*t;lane=1;for(let i=1;i<8;i++){x-=w[i];if(x<=0){lane=i;break}}if(lane===last)lane=lane%7+1}
-  last=lane;notes.push({time:+(st*u+(s.offset||0)).toFixed(3),lane})}
+  last=lane;notes.push({time:+(st*u+(s.offset||0)).toFixed(3),lane,p:melo(st)})}
  return{songId:s.id,difficulty:diff,level:Math.max(1,Math.min(12,Math.round(notes.length/s.duration/1.5))),notes}}
 async function getBuf(s){if(bufs[s.id])return bufs[s.id];
  if(s.audioUrl){try{const r=await fetch(s.audioUrl);if(!r.ok)throw 0;return bufs[s.id]=await AC.decodeAudioData(await r.arrayBuffer())}catch(e){$('#st').textContent='mp3を読み込めません(URL・CORSを確認)';throw e}}
@@ -79,6 +80,7 @@ async function getBuf(s){if(bufs[s.id])return bufs[s.id];
   if(sec!==4){const o=c.createOscillator();o.frequency.setValueAtTime(160,t);o.frequency.exponentialRampToValueAtTime(40,t+.15);env(o,t,.25,.9)}
   nz(t+spb/2,.05,.12);if(sec===2)for(let k=0;k<4;k++)nz(t+k*spb/4,.04,.05+.15*(t/s.duration-.35)*6);
   for(let k=0;k<2;k++)if(sec!==4||b%2===0)osc('sawtooth',root*Math.pow(2,pat[(b*2+k)%8]/12),t+k*spb/2,spb/2*.9,.2);
+  if(sec!==4&&b%2===0){osc('sine',root*4,t,spb*2,.05);osc('sine',root*4*Math.pow(2,7/12),t,spb*2,.04)}
   if(sec===3||sec===5||sec===1)for(let k=0;k<4;k++)osc('triangle',root*4*Math.pow(2,sc[(b*4+k*3+(sec===3?0:2))%7]/12),t+k*spb/4,spb/4,sec===1?.05:.1)}
  return bufs[s.id]=await c.startRendering()}
 
@@ -102,7 +104,7 @@ function unlock(){try{if(navigator.audioSession)navigator.audioSession.type='pla
 const persist=()=>LS('nr_songs',S.songs.filter(x=>!x.local));
 $('#madd').onclick=async()=>{AC=AC||new AudioContext();const f=$('#mf').files[0],url=$('#mu').value.trim(),bpm=+$('#mb').value;
  if(!(bpm>=60&&bpm<=300)||(!f&&!url))return $('#st').textContent='BPM(60〜300)と、mp3のURLかファイルを入力してください';
- const id='mp3_'+Date.now().toString(36),s={id,title:$('#mt').value||'Untitled',artist:$('#ma').value||'-',bpm,offset:+$('#mo').value||0,audioUrl:f?'':url,seed:Math.floor(Math.random()*1e9),tags:['MP3'],added:Date.now(),local:f?1:0,duration:0};
+ const id='mp3_'+Date.now().toString(36),s={id,title:$('#mt').value||'Untitled',artist:$('#ma').value||'-',bpm,offset:+$('#mo').value||0,key:+$('#mk').value,audioUrl:f?'':url,seed:Math.floor(Math.random()*1e9),tags:['MP3'],added:Date.now(),local:f?1:0,duration:0};
  $('#st').textContent='読み込み中…';
  try{if(f)bufs[id]=await AC.decodeAudioData(await f.arrayBuffer());else await getBuf(s)}catch(e){return $('#st').textContent='mp3を読み込めませんでした'}
  s.duration=Math.floor(bufs[id].duration);S.songs.unshift(s);persist();
@@ -124,8 +126,19 @@ function apply(j,l,d){const c=G.cnt,g=G.g,T={NORMAL:{PERFECT:g,GREAT:g,GOOD:g/2,
  if(G.mode==='SURVIVAL'&&G.gauge<=0)G.fail=true}
 function hit(l){if(!G||G.done)return;const t=now();let b=null;G.fl[l]=.6;
  for(const n of G.notes){if(n.time-t>.25)break;if(!n.d&&n.lane===l){const d=t-n.time;if(Math.abs(d)<=.25&&(!b||Math.abs(d)<Math.abs(b.d)))b={n,d}}}
- if(b){b.n.d=1;apply(judge(b.d),l,b.d);if(S.set.se)blip(l)}}
-function blip(l){const o=AC.createOscillator(),g=AC.createGain(),t=AC.currentTime;o.type=l?'triangle':'square';o.frequency.value=l?330*Math.pow(2,[0,2,4,7,9,12,14][l-1]/12):110;
+ if(b){b.n.d=1;apply(judge(b.d),l,b.d);if(S.set.se)blip(l,b.n.p,G.song)}}
+const SCL=[0,3,5,7,10,12,15],melo=st=>SCL[(st*3+(st>>4))%7];
+function lead(f){const t=AC.currentTime,g=AC.createGain();g.gain.setValueAtTime(.1,t);g.gain.exponentialRampToValueAtTime(.001,t+.25);g.connect(AC.destination);
+ [-6,6].forEach(d=>{const o=AC.createOscillator();o.type='sawtooth';o.frequency.value=f;o.detune.value=d;o.connect(g);o.start(t);o.stop(t+.25)})}
+/* エレキギター(Karplus-Strong撥弦 + ディストーション) */
+const gc={};let DIST;
+function guitar(f){const R=AC.sampleRate,k=Math.round(f*10);let b=gc[k];
+ if(!b){const n=Math.floor(R*.7),N=Math.max(2,Math.round(R/f)),d=new Float32Array(n),w=new Float32Array(N);for(let i=0;i<N;i++)w[i]=Math.random()*2-1;
+  for(let i=0;i<n;i++){const j=i%N;d[i]=w[j];w[j]=.4985*(w[j]+w[(j+1)%N])}
+  b=gc[k]=AC.createBuffer(1,n,R);b.copyToChannel(d,0)}
+ if(!DIST){const c=new Float32Array(1024);for(let i=0;i<1024;i++)c[i]=Math.tanh((i/512-1)*6);DIST=AC.createWaveShaper();DIST.curve=c;const g=AC.createGain();g.gain.value=.3;DIST.connect(g);g.connect(AC.destination)}
+ const o=AC.createBufferSource();o.buffer=b;o.connect(DIST);o.start()}
+function blip(l,p,s){if(l&&p!==undefined)return guitar(110*Math.pow(2,((s.key!=null?s.key:s.seed%7)+p)/12));const o=AC.createOscillator(),g=AC.createGain(),t=AC.currentTime;o.type=l?'triangle':'square';o.frequency.value=l?330*Math.pow(2,[0,2,4,7,9,12,14][l-1]/12):110;
  g.gain.setValueAtTime(.18,t);g.gain.exponentialRampToValueAtTime(.001,t+.1);o.connect(g);g.connect(AC.destination);o.start(t);o.stop(t+.1)}
 function loop(){if(!G)return;const t=now();for(const n of G.notes)if(!n.d&&t-n.time>.25){n.d=1;apply('MISS',n.lane,0)}
  draw(t);if(G.fail||t>G.song.duration+1.5)return end();requestAnimationFrame(loop)}
