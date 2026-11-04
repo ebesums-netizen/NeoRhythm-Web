@@ -88,12 +88,15 @@ function renderList(){$('#list').innerHTML=S.songs.map(s=>{const f=S.fav.include
  return`<div class="card"><b>${f?'★':'☆'} ${s.title}</b> <span style="opacity:.6">${s.artist}</span><div>BPM ${s.bpm} ・ ${s.duration}s ${s.tags.map(t=>`<span class="tag">${t}</span>`).join('')}</div>
  <div class="row"><button data-a="f" data-i="${s.id}">お気に入り</button><button data-a="v" data-i="${s.id}">試聴</button>
  <button class="p" data-a="p" data-i="${s.id}" data-d="NORMAL">NORMAL ☆${lv('NORMAL')}</button><button class="k" data-a="p" data-i="${s.id}" data-d="HYPER">HYPER ☆${lv('HYPER')}</button></div></div>`}).join('')}
-$('#list').onclick=async e=>{const b=e.target.closest('button');if(!b)return;const s=S.songs.find(x=>x.id===b.dataset.i);AC=AC||new AudioContext();await AC.resume();
+$('#list').onclick=async e=>{const b=e.target.closest('button');if(!b)return;const s=S.songs.find(x=>x.id===b.dataset.i);AC=AC||new AudioContext();unlock();await AC.resume();
  if(b.dataset.a==='f'){S.fav=S.fav.includes(s.id)?S.fav.filter(x=>x!==s.id):[...S.fav,s.id];LS('nr_fav',S.fav);renderList()}
  if(b.dataset.a==='v'){$('#st').textContent='試聴準備中…';const bf=await getBuf(s),o=AC.createBufferSource();o.buffer=bf;o.connect(AC.destination);o.start(0,s.duration*.5,8);$('#st').textContent='試聴中 8秒'}
  if(b.dataset.a==='p'){$('#st').textContent='音源生成中…';start(s,b.dataset.d,$('#mode').value)}};
 $('#gen').onclick=addSong;
 
+/* ---------- スマホ音声ロック解除(iOSの消音スイッチ対策) ---------- */
+function unlock(){try{if(navigator.audioSession)navigator.audioSession.type='playback'}catch(e){}
+ try{const a=new Audio('data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEARKwAAIhYAQACABAAZGF0YQAAAAA=');a.play().catch(()=>{})}catch(e){}}
 /* ---------- mp3登録 ---------- */
 const persist=()=>LS('nr_songs',S.songs.filter(x=>!x.local));
 $('#madd').onclick=async()=>{AC=AC||new AudioContext();const f=$('#mf').files[0],url=$('#mu').value.trim(),bpm=+$('#mb').value;
