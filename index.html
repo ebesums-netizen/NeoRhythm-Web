@@ -70,7 +70,7 @@ function genChart(s,diff,w){const r=rng(s.seed+({NORMAL:1,HYPER:7,PRACTICE:13}[d
   last=lane;notes.push({time:+(st*u+(s.offset||0)).toFixed(3),lane,p:melo(st)})}
  return{songId:s.id,difficulty:diff,level:Math.max(1,Math.min(12,Math.round(notes.length/s.duration/1.5))),notes}}
 async function getBuf(s){if(bufs[s.id])return bufs[s.id];
- if(s.audioUrl){try{const r=await fetch(s.audioUrl);if(!r.ok)throw 0;return bufs[s.id]=await AC.decodeAudioData(await r.arrayBuffer())}catch(e){$('#st').textContent='mp3を読み込めません(URL・CORSを確認)';throw e}}
+ if(s.audioUrl){try{const r=await fetch(s.audioUrl);if(!r.ok)throw new Error('HTTP '+r.status);return bufs[s.id]=await AC.decodeAudioData(await r.arrayBuffer())}catch(e){$('#st').textContent='mp3を読み込めません(URL・CORSを確認)';throw e}}
  if(s.local)throw new Error('local');
  const R=22050,c=new OfflineAudioContext(1,R*s.duration,R),r=rng(s.seed+99),spb=60/s.bpm,root=55*Math.pow(2,(s.seed%7)/12),
  pat=[0,0,3,0,5,0,7,3],sc=[0,3,5,7,10,12,15],nb=c.createBuffer(1,R,R),nd=nb.getChannelData(0);for(let i=0;i<R;i++)nd[i]=r()*2-1;
@@ -107,7 +107,7 @@ $('#madd').onclick=async()=>{AC=AC||new AudioContext();const f=$('#mf').files[0]
  if(!(bpm>=60&&bpm<=300)||(!f&&!url))return $('#st').textContent='BPM(60〜300)と、mp3のURLかファイルを入力してください';
  const id='mp3_'+Date.now().toString(36),s={id,title:$('#mt').value||'Untitled',artist:$('#ma').value||'-',bpm,offset:+$('#mo').value||0,key:+$('#mk').value,chartUrl:$('#mc').value.trim(),audioUrl:f?'':url,seed:Math.floor(Math.random()*1e9),tags:['MP3'],added:Date.now(),local:f?1:0,duration:0};
  $('#st').textContent='読み込み中…';
- try{if(f)bufs[id]=await AC.decodeAudioData(await f.arrayBuffer());else await getBuf(s)}catch(e){return $('#st').textContent='mp3を読み込めませんでした'}
+ try{if(f)bufs[id]=await AC.decodeAudioData(await f.arrayBuffer());else await getBuf(s)}catch(e){return $('#st').textContent='mp3を読み込めませんでした: '+(e&&e.message||e)}
  s.duration=Math.floor(bufs[id].duration);S.songs.unshift(s);persist();
  if(!s.local){await api('saveSong',JSON.stringify(s));for(const d of['NORMAL','HYPER'])await api('saveChart',JSON.stringify(genChart(s,d)))}
  renderList();$('#st').textContent='登録しました: '+s.title+(s.local?'(今回のみ)':'')};
@@ -127,21 +127,22 @@ function apply(j,l,d){const c=G.cnt,g=G.g,T={NORMAL:{PERFECT:g,GREAT:g,GOOD:g/2,
  if(G.mode==='SURVIVAL'&&G.gauge<=0)G.fail=true}
 function hit(l){if(!G||G.done)return;const t=now();let b=null;G.fl[l]=.6;
  for(const n of G.notes){if(n.time-t>.25)break;if(!n.d&&n.lane===l){const d=t-n.time;if(Math.abs(d)<=.25&&(!b||Math.abs(d)<Math.abs(b.d)))b={n,d}}}
- if(b){b.n.d=1;apply(judge(b.d),l,b.d);if(S.set.se)blip(l,b.n.p,G.song)}}
+ if(b){b.n.d=1;apply(judge(b.d),l,b.d);if(S.set.se)blip(l,b.n,G.song,b.d<0?-b.d:0)}}
 const SCL=[0,3,5,7,10,12,15],melo=st=>SCL[(st*3+(st>>4))%7];
 function lead(f){const t=AC.currentTime,g=AC.createGain();g.gain.setValueAtTime(.1,t);g.gain.exponentialRampToValueAtTime(.001,t+.25);g.connect(AC.destination);
  [-6,6].forEach(d=>{const o=AC.createOscillator();o.type='sawtooth';o.frequency.value=f;o.detune.value=d;o.connect(g);o.start(t);o.stop(t+.25)})}
 /* エレキギター(Karplus-Strong撥弦 + ディストーション) */
 const gc={};let DIST;
-function guitar(f){const R=AC.sampleRate,k=Math.round(f*10);let b=gc[k];
+function guitar(f,ds){const R=AC.sampleRate,k=Math.round(f*10);let b=gc[k];
  if(!b){const n=Math.floor(R*.7),N=Math.max(2,Math.round(R/f)),d=new Float32Array(n),w=new Float32Array(N);for(let i=0;i<N;i++)w[i]=Math.random()*2-1;
   for(let i=0;i<n;i++){const j=i%N;d[i]=w[j];w[j]=.4985*(w[j]+w[(j+1)%N])}
   b=gc[k]=AC.createBuffer(1,n,R);b.copyToChannel(d,0)}
  if(!DIST){const c=new Float32Array(1024);for(let i=0;i<1024;i++)c[i]=Math.tanh((i/512-1)*6);DIST=AC.createWaveShaper();DIST.curve=c;const g=AC.createGain();g.gain.value=.3;DIST.connect(g);g.connect(AC.destination)}
- const o=AC.createBufferSource();o.buffer=b;o.connect(DIST);o.start()}
+ const o=AC.createBufferSource(),e=AC.createGain(),t=AC.currentTime+(ds||0);e.gain.setValueAtTime(1,t);e.gain.exponentialRampToValueAtTime(.001,t+.2);o.buffer=b;o.connect(e);e.connect(DIST);o.start(t)}
+function power(f,ds){guitar(f,ds);guitar(f*1.4983,ds)}
 function perc(l){const R=AC.sampleRate,n=Math.floor(R*.06),b=AC.createBuffer(1,n,R),d=b.getChannelData(0);for(let i=0;i<n;i++)d[i]=(Math.random()*2-1)*Math.pow(1-i/n,3);
  const o=AC.createBufferSource(),f=AC.createBiquadFilter(),g=AC.createGain();o.buffer=b;f.type='bandpass';f.frequency.value=l?2200+l*250:900;g.gain.value=.5;o.connect(f);f.connect(g);g.connect(AC.destination);o.start()}
-function blip(l,p,s){if(s.audioUrl||s.local)return perc(l);if(l&&p!==undefined)return guitar(110*Math.pow(2,((s.key!=null?s.key:s.seed%7)+p)/12));const o=AC.createOscillator(),g=AC.createGain(),t=AC.currentTime;o.type=l?'triangle':'square';o.frequency.value=l?330*Math.pow(2,[0,2,4,7,9,12,14][l-1]/12):110;
+function blip(l,n,s,ds){if(l){const k=s.key!=null?s.key:s.seed%7;let r=n.r;if(r===undefined)r=s.audioUrl||s.local?k:k+[0,0,3,0,5,0,7,3][Math.floor(n.time/(30/s.bpm))%8];return power(110*Math.pow(2,r/12)*(l>=6?2:1),ds)}const o=AC.createOscillator(),g=AC.createGain(),t=AC.currentTime;o.type=l?'triangle':'square';o.frequency.value=l?330*Math.pow(2,[0,2,4,7,9,12,14][l-1]/12):110;
  g.gain.setValueAtTime(.18,t);g.gain.exponentialRampToValueAtTime(.001,t+.1);o.connect(g);g.connect(AC.destination);o.start(t);o.stop(t+.1)}
 function loop(){if(!G)return;const t=now();for(const n of G.notes)if(!n.d&&t-n.time>.25){n.d=1;apply('MISS',n.lane,0)}
  draw(t);if(G.fail||t>G.song.duration+1.5)return end();requestAnimationFrame(loop)}
