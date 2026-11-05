@@ -24,6 +24,7 @@ canvas{width:100%;display:block;background:#000;touch-action:none}
 <label>曲のキー(ギターの音程用。マイナー系の曲向け) <select id="mk"><option value="0">A</option><option value="1">A#</option><option value="2">B</option><option value="3">C</option><option value="4">C#</option><option value="5">D</option><option value="6">D#</option><option value="7">E</option><option value="8">F</option><option value="9">F#</option><option value="10">G</option><option value="11">G#</option></select></label>
 <label>1拍目の位置(秒) <input id="mo" type="number" step="0.001" value="0" style="width:100px"></label>
 <label>mp3のURL(GitHub Pages推奨・保存されます) <input id="mu" type="text" style="width:100%" placeholder="audio/xxx.mp3"></label>
+<label>譜面JSONのURL(任意。HYPERで使われます) <input id="mc" type="text" style="width:100%" placeholder="charts/xxx.json"></label>
 <label>またはファイル選択(今回の起動中のみ) <input id="mf" type="file" accept="audio/*"></label>
 <button class="p" id="madd">登録</button></details>
 <div id="list"></div></div>
@@ -104,7 +105,7 @@ function unlock(){try{if(navigator.audioSession)navigator.audioSession.type='pla
 const persist=()=>LS('nr_songs',S.songs.filter(x=>!x.local));
 $('#madd').onclick=async()=>{AC=AC||new AudioContext();const f=$('#mf').files[0],url=$('#mu').value.trim(),bpm=+$('#mb').value;
  if(!(bpm>=60&&bpm<=300)||(!f&&!url))return $('#st').textContent='BPM(60〜300)と、mp3のURLかファイルを入力してください';
- const id='mp3_'+Date.now().toString(36),s={id,title:$('#mt').value||'Untitled',artist:$('#ma').value||'-',bpm,offset:+$('#mo').value||0,key:+$('#mk').value,audioUrl:f?'':url,seed:Math.floor(Math.random()*1e9),tags:['MP3'],added:Date.now(),local:f?1:0,duration:0};
+ const id='mp3_'+Date.now().toString(36),s={id,title:$('#mt').value||'Untitled',artist:$('#ma').value||'-',bpm,offset:+$('#mo').value||0,key:+$('#mk').value,chartUrl:$('#mc').value.trim(),audioUrl:f?'':url,seed:Math.floor(Math.random()*1e9),tags:['MP3'],added:Date.now(),local:f?1:0,duration:0};
  $('#st').textContent='読み込み中…';
  try{if(f)bufs[id]=await AC.decodeAudioData(await f.arrayBuffer());else await getBuf(s)}catch(e){return $('#st').textContent='mp3を読み込めませんでした'}
  s.duration=Math.floor(bufs[id].duration);S.songs.unshift(s);persist();
@@ -114,7 +115,7 @@ $('#madd').onclick=async()=>{AC=AC||new AudioContext();const f=$('#mf').files[0]
 /* ---------- プレイ ---------- */
 const now=()=>AC.currentTime-G.t0-S.set.off/1000;
 async function start(song,diff,mode,w){AC=AC||new AudioContext();await AC.resume();cur={song,diff,mode};
- const bf=await getBuf(song),notes=genChart(song,diff,w).notes.map(n=>({...n,d:0})),N=notes.length,src=AC.createBufferSource();src.buffer=bf;src.connect(AC.destination);
+ const bf=await getBuf(song),cc=song.chartUrl&&diff==='HYPER'?await fetch(song.chartUrl).then(r=>r.json()).catch(()=>null):null,notes=(cc||genChart(song,diff,w)).notes.map(n=>({...n,d:0})),N=notes.length,src=AC.createBufferSource();src.buffer=bf;src.connect(AC.destination);
  const t0=AC.currentTime+2;src.start(t0);
  G={song,diff,mode,notes,N,t0,src,g:80/N,gauge:mode==='SURVIVAL'?100:mode==='FOCUS'?50:20,hist:[],cnt:{PERFECT:0,GREAT:0,GOOD:0,BAD:0,MISS:0},combo:0,max:0,score:0,miss:Array(8).fill(0),diffs:[],fl:Array(8).fill(0),msg:'',mt:0,fail:false};
  show('play');cv=$('#cv');cv.width=Math.min(innerWidth,760);cv.height=Math.round(innerHeight*.92);requestAnimationFrame(loop)}
@@ -138,7 +139,9 @@ function guitar(f){const R=AC.sampleRate,k=Math.round(f*10);let b=gc[k];
   b=gc[k]=AC.createBuffer(1,n,R);b.copyToChannel(d,0)}
  if(!DIST){const c=new Float32Array(1024);for(let i=0;i<1024;i++)c[i]=Math.tanh((i/512-1)*6);DIST=AC.createWaveShaper();DIST.curve=c;const g=AC.createGain();g.gain.value=.3;DIST.connect(g);g.connect(AC.destination)}
  const o=AC.createBufferSource();o.buffer=b;o.connect(DIST);o.start()}
-function blip(l,p,s){if(l&&p!==undefined)return guitar(110*Math.pow(2,((s.key!=null?s.key:s.seed%7)+p)/12));const o=AC.createOscillator(),g=AC.createGain(),t=AC.currentTime;o.type=l?'triangle':'square';o.frequency.value=l?330*Math.pow(2,[0,2,4,7,9,12,14][l-1]/12):110;
+function perc(l){const R=AC.sampleRate,n=Math.floor(R*.06),b=AC.createBuffer(1,n,R),d=b.getChannelData(0);for(let i=0;i<n;i++)d[i]=(Math.random()*2-1)*Math.pow(1-i/n,3);
+ const o=AC.createBufferSource(),f=AC.createBiquadFilter(),g=AC.createGain();o.buffer=b;f.type='bandpass';f.frequency.value=l?2200+l*250:900;g.gain.value=.5;o.connect(f);f.connect(g);g.connect(AC.destination);o.start()}
+function blip(l,p,s){if(s.audioUrl||s.local)return perc(l);if(l&&p!==undefined)return guitar(110*Math.pow(2,((s.key!=null?s.key:s.seed%7)+p)/12));const o=AC.createOscillator(),g=AC.createGain(),t=AC.currentTime;o.type=l?'triangle':'square';o.frequency.value=l?330*Math.pow(2,[0,2,4,7,9,12,14][l-1]/12):110;
  g.gain.setValueAtTime(.18,t);g.gain.exponentialRampToValueAtTime(.001,t+.1);o.connect(g);g.connect(AC.destination);o.start(t);o.stop(t+.1)}
 function loop(){if(!G)return;const t=now();for(const n of G.notes)if(!n.d&&t-n.time>.25){n.d=1;apply('MISS',n.lane,0)}
  draw(t);if(G.fail||t>G.song.duration+1.5)return end();requestAnimationFrame(loop)}
