@@ -102,7 +102,7 @@ $('#gen').onclick=addSong;
 function unlock(){try{if(navigator.audioSession)navigator.audioSession.type='playback'}catch(e){}
  try{const a=new Audio('data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEARKwAAIhYAQACABAAZGF0YQAAAAA=');a.play().catch(()=>{})}catch(e){}}
 /* ---------- mp3登録 ---------- */
-const persist=()=>LS('nr_songs',S.songs.filter(x=>!x.local));
+const persist=()=>LS('nr_songs',S.songs.filter(x=>!x.local&&!x.fixed));
 $('#madd').onclick=async()=>{AC=AC||new AudioContext();const f=$('#mf').files[0],url=$('#mu').value.trim(),bpm=+$('#mb').value;
  if(!(bpm>=60&&bpm<=300)||(!f&&!url))return $('#st').textContent='BPM(60〜300)と、mp3のURLかファイルを入力してください';
  const id='mp3_'+Date.now().toString(36),s={id,title:$('#mt').value||'Untitled',artist:$('#ma').value||'-',bpm,offset:+$('#mo').value||0,key:+$('#mk').value,chartUrl:$('#mc').value.trim(),audioUrl:f?'':url,seed:Math.floor(Math.random()*1e9),tags:['MP3'],added:Date.now(),local:f?1:0,duration:0};
@@ -187,5 +187,7 @@ $('#sback').onclick=()=>{S.set.off=+$('#off').value||0;S.set.url=$('#gu').value.
 
 /* ---------- 起動 ---------- */
 (async()=>{S.logs=LS('nr_logs')||[];const r=await api('getSongs');S.songs=r&&r.length?r.map(JSON.parse).reverse():(LS('nr_songs')||[]);
+ const fj=await fetch('songs.json',{cache:'no-cache'}).then(r=>r.json()).catch(()=>[]);
+ S.songs=[...fj.map(x=>({...x,fixed:1})),...S.songs.filter(x=>!fj.some(y=>y.id===x.id))];
  if(S.set.auto&&!S.songs.length)await addSong();renderList();show('sel')})();
 </script></body></html>
