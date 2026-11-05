@@ -1,0 +1,15 @@
+[
+  {
+    "id": "maximum_boss_phase",
+    "title": "maximum_boss_phase",
+    "artist": "Taro",
+    "bpm": 150,
+    "offset": 0.09,
+    "key": 0,
+    "duration": 172,
+    "seed": 150150,
+    "tags": ["MP3", "Trance"],
+    "audioUrl": "audio/maximum_boss_phase.mp3",
+    "chartUrl": "charts/maximum_boss_phase.json"
+  }
+]
