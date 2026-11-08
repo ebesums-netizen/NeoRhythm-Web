@@ -14,5 +14,95 @@
     ],
     "audioUrl": "audio/maximum_boss_phase.mp3",
     "chartUrl": "charts/maximum_boss_phase.json"
+  },
+  {
+    "id": "apex_horizon",
+    "title": "Apex Horizon",
+    "artist": "Taro",
+    "bpm": 128,
+    "offset": 0.066,
+    "key": 8,
+    "duration": 92,
+    "seed": 128128,
+    "tags": [
+      "MP3"
+    ],
+    "audioUrl": "audio/apex_horizon.mp3",
+    "chartUrl": "charts/apex_horizon.json"
+  },
+  {
+    "id": "midnight_overdrive",
+    "title": "Midnight Overdrive",
+    "artist": "Taro",
+    "bpm": 176,
+    "offset": 0.176,
+    "key": 8,
+    "duration": 91,
+    "seed": 176176,
+    "tags": [
+      "MP3"
+    ],
+    "audioUrl": "audio/midnight_overdrive.mp3",
+    "chartUrl": "charts/midnight_overdrive.json"
+  },
+  {
+    "id": "sakura_high_speed_run",
+    "title": "Sakura High Speed Run",
+    "artist": "Taro",
+    "bpm": 144,
+    "offset": 0.414,
+    "key": 8,
+    "duration": 102,
+    "seed": 144144,
+    "tags": [
+      "MP3"
+    ],
+    "audioUrl": "audio/sakura_high_speed_run.mp3",
+    "chartUrl": "charts/sakura_high_speed_run.json"
+  },
+  {
+    "id": "velocity_ascent",
+    "title": "Velocity Ascent",
+    "artist": "Taro",
+    "bpm": 150,
+    "offset": 0.016,
+    "key": 3,
+    "duration": 102,
+    "seed": 150150,
+    "tags": [
+      "MP3"
+    ],
+    "audioUrl": "audio/velocity_ascent.mp3",
+    "chartUrl": "charts/velocity_ascent.json"
+  },
+  {
+    "id": "kinetic_overdrive",
+    "title": "Kinetic Overdrive",
+    "artist": "Taro",
+    "bpm": 150,
+    "offset": 0.012,
+    "key": 0,
+    "duration": 179,
+    "seed": 150150,
+    "tags": [
+      "MP3"
+    ],
+    "audioUrl": "audio/kinetic_overdrive.mp3",
+    "chartUrl": "charts/kinetic_overdrive.json"
+  },
+  {
+    "id": "terminal_lockdown",
+    "title": "Terminal Lockdown",
+    "artist": "Taro",
+    "bpm": 144,
+    "offset": 0.394,
+    "key": 7,
+    "duration": 91,
+    "seed": 144144,
+    "tags": [
+      "MP3"
+    ],
+    "audioUrl": "audio/terminal_lockdown.mp3",
+    "chartUrl": "charts/terminal_lockdown.json"
   }
 ]
