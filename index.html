@@ -158,15 +158,23 @@ function gtr(f,ds){const B=bus(),t=AC.currentTime+(ds||0);B.dl.delayTime.value=.
  env.gain.setValueAtTime(0,t);env.gain.linearRampToValueAtTime(.45,t+.008);env.gain.exponentialRampToValueAtTime(.18,t+.15);env.gain.setTargetAtTime(0,t+.55,.18);
  o.connect(lp);o2.connect(lp);lp.connect(env);env.connect(cut);cut.connect(B.sh);const n=[o,o2,lfo],end=t+1.4;n.forEach(x=>{x.start(t);x.stop(end)});VO.push({cut,t,end,n})}
 /* 打鍵音の種類(曲選択画面で切替) */
-function tone(f,ds){const k=S.set.tone||'gtr';if(k==='gtr'){guitar(f,ds,.12);return gtr(f<300?f*2:f,ds)}
+function tone(f,ds,ex){const k=S.set.tone||'gtr';if(k==='gtr'){guitar(f,ds,.12);return gtr(ex||f>=300?f:f*2,ds)}
  const B=bus(),t=AC.currentTime+(ds||0),end=t+1.2,env=AC.createGain(),lp=AC.createBiquadFilter(),os=[];lp.type='lowpass';B.dl.delayTime.value=.75*60/(G?G.song.bpm:150);
- const mk=(ty,fr,dt)=>{const o=AC.createOscillator();o.type=ty;o.frequency.value=fr;o.detune.value=dt||0;os.push(o);return o},F=f*2;
+ const mk=(ty,fr,dt)=>{const o=AC.createOscillator();o.type=ty;o.frequency.value=fr;o.detune.value=dt||0;os.push(o);return o},F=ex?f:f*2;
  if(k==='saw'){[-12,0,12].forEach(d=>mk('sawtooth',F,d).connect(lp));lp.frequency.value=4000;env.gain.setValueAtTime(0,t);env.gain.linearRampToValueAtTime(.22,t+.01);env.gain.setTargetAtTime(0,t+.18,.12)}
  else if(k==='pluck'){mk('sawtooth',F).connect(lp);mk('square',F,5).connect(lp);lp.frequency.setValueAtTime(5000,t);lp.frequency.exponentialRampToValueAtTime(400,t+.2);env.gain.setValueAtTime(.35,t);env.gain.exponentialRampToValueAtTime(.001,t+.3)}
  else if(k==='bell'){const c=mk('sine',F),m=mk('sine',F*3.5),mg=AC.createGain();mg.gain.setValueAtTime(F*2,t);mg.gain.exponentialRampToValueAtTime(1,t+.8);m.connect(mg);mg.connect(c.frequency);c.connect(lp);lp.frequency.value=9000;env.gain.setValueAtTime(.6,t);env.gain.exponentialRampToValueAtTime(.001,t+1)}
  else{mk('square',F).connect(lp);lp.frequency.value=6000;env.gain.setValueAtTime(.3,t);env.gain.exponentialRampToValueAtTime(.001,t+.14)}
  lp.connect(env);env.connect(B.out);os.forEach(o=>{o.start(t);o.stop(end)})}
-function blip(l,n,s,ds){if(l){const k=s.key!=null?s.key:s.seed%7;let r=n.r;if(r===undefined)r=s.audioUrl||s.local?k:k+[0,0,3,0,5,0,7,3][Math.floor(n.time/(30/s.bpm))%8];const q=n.t!==undefined?n.t:3,iv=[0,q,7,12,12+q,19,24][l-1];const f=110*Math.pow(2,(r+iv)/12);return tone(f,ds)}const o=AC.createOscillator(),g=AC.createGain(),t=AC.currentTime;o.type=l?'triangle':'square';o.frequency.value=l?330*Math.pow(2,[0,2,4,7,9,12,14][l-1]/12):110;
+/* 強拍の和音(ルート+5度+オクターブ)と、スクラッチのインパクト音 */
+function stab(r,ds){const B=bus(),t=AC.currentTime+(ds||0),fr=110*Math.pow(2,r/12),env=AC.createGain(),lp=AC.createBiquadFilter();lp.type='lowpass';lp.frequency.setValueAtTime(2400,t);lp.frequency.exponentialRampToValueAtTime(500,t+.35);
+ env.gain.setValueAtTime(0,t);env.gain.linearRampToValueAtTime(.16,t+.01);env.gain.setTargetAtTime(0,t+.08,.12);
+ [fr,fr*1.4983,fr*2].forEach(x=>{[-6,6].forEach(d=>{const o=AC.createOscillator();o.type='sawtooth';o.frequency.value=x;o.detune.value=d;o.connect(lp);o.start(t);o.stop(t+.6)})});lp.connect(env);env.connect(B.out)}
+function impact(r,ds){const t=AC.currentTime+(ds||0),f=55*Math.pow(2,(r||0)/12),o=AC.createOscillator(),g=AC.createGain();o.type='sine';o.frequency.setValueAtTime(f*3,t);o.frequency.exponentialRampToValueAtTime(f,t+.08);
+ g.gain.setValueAtTime(.5,t);g.gain.exponentialRampToValueAtTime(.001,t+.45);o.connect(g);g.connect(AC.destination);o.start(t);o.stop(t+.5);
+ const R=AC.sampleRate,n=Math.floor(R*.25),b=AC.createBuffer(1,n,R),d=b.getChannelData(0);for(let i=0;i<n;i++)d[i]=(Math.random()*2-1)*Math.pow(1-i/n,2);
+ const s=AC.createBufferSource(),h=AC.createBiquadFilter(),g2=AC.createGain();s.buffer=b;h.type='highpass';h.frequency.setValueAtTime(1500,t);h.frequency.exponentialRampToValueAtTime(7000,t+.2);g2.gain.value=.22;s.connect(h);h.connect(g2);g2.connect(AC.destination);s.start(t)}
+function blip(l,n,s,ds){if(!l&&n.r!==undefined)return impact(n.r,ds);if(l&&n.p!==undefined&&n.r!==undefined){if(n.c)stab(n.r,ds);return tone(110*Math.pow(2,n.p/12),ds,1)}if(l){const k=s.key!=null?s.key:s.seed%7;let r=n.r;if(r===undefined)r=s.audioUrl||s.local?k:k+[0,0,3,0,5,0,7,3][Math.floor(n.time/(30/s.bpm))%8];const q=n.t!==undefined?n.t:3,iv=[0,q,7,12,12+q,19,24][l-1];const f=110*Math.pow(2,(r+iv)/12);return tone(f,ds)}const o=AC.createOscillator(),g=AC.createGain(),t=AC.currentTime;o.type=l?'triangle':'square';o.frequency.value=l?330*Math.pow(2,[0,2,4,7,9,12,14][l-1]/12):110;
  g.gain.setValueAtTime(.18,t);g.gain.exponentialRampToValueAtTime(.001,t+.1);o.connect(g);g.connect(AC.destination);o.start(t);o.stop(t+.1)}
 function loop(){if(!G)return;const t=now();
  if(G.auto)for(const n of G.notes){if(n.time-t>.12)break;if(!n.s){n.s=1;if(n.time-t>-.05&&S.set.se)blip(n.lane,n,G.song,Math.max(0,n.time-t))}if(!n.d&&t>=n.time){n.d=1;apply('PERFECT',n.lane,0)}}

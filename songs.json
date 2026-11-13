@@ -36,7 +36,7 @@
     "artist": "Taro",
     "bpm": 176,
     "offset": 0.176,
-    "key": 8,
+    "key": 1,
     "duration": 91,
     "seed": 176176,
     "tags": [
@@ -51,7 +51,7 @@
     "artist": "Taro",
     "bpm": 144,
     "offset": 0.414,
-    "key": 8,
+    "key": 6,
     "duration": 102,
     "seed": 144144,
     "tags": [
@@ -66,7 +66,7 @@
     "artist": "Taro",
     "bpm": 150,
     "offset": 0.016,
-    "key": 3,
+    "key": 8,
     "duration": 102,
     "seed": 150150,
     "tags": [
@@ -81,7 +81,7 @@
     "artist": "Taro",
     "bpm": 150,
     "offset": 0.012,
-    "key": 0,
+    "key": 11,
     "duration": 179,
     "seed": 150150,
     "tags": [
