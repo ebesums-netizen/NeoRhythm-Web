@@ -15,7 +15,13 @@ canvas{width:100%;display:block;background:#000;touch-action:none}
 .big{font-size:44px;font-weight:800;color:var(--ac)}label{display:block;margin:8px 0}
 </style></head><body>
 
-<div id="sel" class="scr"><h1>NeoRhythm Web</h1>
+<div id="login" class="scr" hidden><h1>NeoRhythm Web</h1><div class="card"><div style="margin-bottom:6px">ログイン</div>
+<label>ID <input id="lid" type="text" autocomplete="username" autocapitalize="off" style="width:100%"></label>
+<label>パスワード <input id="lpw" type="password" autocomplete="current-password" style="width:100%"></label>
+<div id="lmsg" style="color:#f66;min-height:1.4em;margin:4px 0"></div>
+<div class="row"><button class="p" id="lgo">ログイン</button><button id="lguest" hidden>ログインせずに使う(広告あり)</button></div></div></div>
+
+<div id="sel" class="scr"><h1>NeoRhythm Web</h1><div id="who" style="font-size:12px;opacity:.85;margin:-2px 0 6px"></div>
 <div class="row"><button class="p" id="gen">＋ AI自動曲追加</button><button id="toSet">設定</button>
 <select id="mode"><option>NORMAL</option><option>SURVIVAL</option><option>FOCUS</option><option value="AUTO">AUTO(自動演奏)</option></select>
 <select id="tone"><option value="gtr">音色:エレキギター</option><option value="saw">音色:スーパーソウ</option><option value="pluck">音色:シンセプラック</option><option value="bell">音色:ベル(FM)</option><option value="chip">音色:8bitチップ</option><option value="edm">音色:EDMリード</option><option value="brass">音色:シンセブラス</option><option value="piano">音色:ピアノ</option><option value="epiano">音色:エレピ</option><option value="organ">音色:オルガン</option><option value="strings">音色:ストリングス</option><option value="choir">音色:コーラス(声)</option><option value="flute">音色:フルート</option><option value="marimba">音色:マリンバ</option><option value="harp">音色:ハープ</option><option value="musicbox">音色:オルゴール</option></select> 開始<input id="skip" type="number" value="0" min="0" style="width:70px">秒<span id="st"></span></div>
@@ -42,15 +48,20 @@ canvas{width:100%;display:block;background:#000;touch-action:none}
 <label><input type="checkbox" id="se"> 打鍵音</label>
 <label><input type="checkbox" id="auto"> AI自動曲追加</label>
 <label><input type="checkbox" id="ana2"> プレイスタイル分析</label>
-<label>GAS API のURL(空欄ならこのブラウザ内に保存) <input id="gu" type="text" style="width:100%" placeholder="https://script.google.com/macros/s/.../exec"></label>
-<label>合言葉 <input id="gt" type="text"></label><div style="opacity:.6">URLや合言葉を変えたら、保存後にページを再読み込みしてください</div>
+<div class="card" id="acct"></div>
 <div>キーコンフィグ (押して変更) / スマホは画面タップ</div><div class="row" id="keys"></div><div style="opacity:.7;font-size:12px;margin-top:4px">難易度ごとの使用キー: BEGINNER=3・4・5鍵(3列) / EASY=2・3・5・6鍵(4列) / NORMAL=2〜6鍵(5列) / HYPER=SCR+1〜7鍵(8列)。スマホは列をタップ。</div>
 <div class="row"><button class="p" id="sback">戻る</button></div></div>
 
+<script src="config.js"></script>
 <script>
 const $=s=>document.querySelector(s),DK=['ShiftLeft','KeyS','KeyD','KeyF','Space','KeyJ','KeyK','KeyL'];
 const LS=(k,v)=>{try{if(v===undefined)return JSON.parse(localStorage.getItem(k)||'null');localStorage.setItem(k,JSON.stringify(v))}catch(e){return null}};
-const api=async(fn,arg)=>{const u=S.set.url;if(!u)return null;try{const r=await fetch(u,{method:'POST',headers:{'Content-Type':'text/plain'},body:JSON.stringify({fn,arg,token:S.set.token})});const j=await r.json();return j.ok?j.data:null}catch(e){return null}};
+/* ---------- ログイン / API (GAS) ---------- */
+const API_URL=typeof API==='string'?API.trim():'',NEED_LOGIN=typeof REQUIRE_LOGIN==='undefined'?true:!!REQUIRE_LOGIN;
+let TOK=LS('nr_tok')||'',DEV=LS('nr_dev');if(!DEV){DEV=(window.crypto&&crypto.randomUUID?crypto.randomUUID():'d'+Date.now().toString(36)+Math.random().toString(36).slice(2,12));LS('nr_dev',DEV)}
+const devName=()=>{const u=navigator.userAgent,os=/iPhone|iPad/.test(u)?'iOS':/Android/.test(u)?'Android':/Windows/.test(u)?'Windows':/Mac/.test(u)?'Mac':/Linux/.test(u)?'Linux':'?',br=/Edg\//.test(u)?'Edge':/OPR\//.test(u)?'Opera':/Chrome|CriOS/.test(u)?'Chrome':/Firefox|FxiOS/.test(u)?'Firefox':/Safari/.test(u)?'Safari':'?';return os+' '+br};
+const api=async(fn,arg,x)=>{if(!API_URL||(!TOK&&fn!=='login'))return null;try{const r=await fetch(API_URL,{method:'POST',body:JSON.stringify({a:fn,t:TOK,arg,...x})}),j=await r.json();
+ if(j.err&&fn!=='login'){logout(j.err);return null}return fn==='login'||fn==='me'?j:j.data}catch(e){return null}};
 const S={songs:[],logs:[],fav:LS('nr_fav')||[],set:Object.assign({off:0,keys:DK.slice(),bg:1,auto:1,ana:1,se:1,url:'',token:''},LS('nr_set')||{})};
 const show=id=>document.querySelectorAll('.scr').forEach(e=>e.hidden=e.id!==id);
 const rng=s=>()=>{s|=0;s=s+0x6D2B79F5|0;let t=Math.imul(s^s>>>15,1|s);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296};
@@ -124,7 +135,7 @@ $('#madd').onclick=async()=>{AC=AC||new AudioContext();const f=$('#mf').files[0]
 
 /* ---------- プレイ ---------- */
 const now=()=>AC.currentTime-G.t0+G.sk-S.set.off/1000;
-async function start(song,diff,mode,w){AC=AC||new AudioContext();await AC.resume();const auto=mode==='AUTO',sk0=Math.max(0,Math.min(song.duration-5,+$('#skip').value||0));cur={song,diff,mode};if(auto)mode='NORMAL';
+async function start(song,diff,mode,w){await adGate();AC=AC||new AudioContext();await AC.resume();const auto=mode==='AUTO',sk0=Math.max(0,Math.min(song.duration-5,+$('#skip').value||0));cur={song,diff,mode};if(auto)mode='NORMAL';
  const bf=await getBuf(song),DD=DIFFS[diff],hb=DD&&song.chartUrl?await fetch(song.chartUrl).then(r=>r.json()).catch(()=>null):null,ch=DD?reduceChart(hb||genChart(song,'HYPER'),song,diff):genChart(song,diff,w),notes=ch.notes.map(n=>({...n,d:0})),N=notes.length,src=AC.createBufferSource();src.buffer=bf;src.connect(AC.destination);
  const t0=AC.currentTime+2;src.start(t0,sk0);notes.forEach(n=>{if(n.time<sk0)n.d=1});
  G={auto,sk:sk0,song,diff,mode,notes,N,t0,src,g:80/N,gauge:mode==='SURVIVAL'?100:mode==='FOCUS'?50:20,hist:[],cnt:{PERFECT:0,GREAT:0,GOOD:0,BAD:0,MISS:0},combo:0,max:0,score:0,miss:Array(DD?DD.L:8).fill(0),diffs:[],fl:Array(DD?DD.L:8).fill(0),L:DD?DD.L:8,km:DD?DD.km:[0,1,2,3,4,5,6,7],ap:DD?DD.ap:1.1,msg:'',mt:0,fail:false};
@@ -255,15 +266,37 @@ $('#quit').onclick=()=>{if(G){G.done=true;try{G.src.stop()}catch(e){}G=null}show
 $('#prac').onclick=()=>{if(lastP)start(cur.song,'PRACTICE',cur.mode,[0,...lastP.slice(1)])};
 
 /* ---------- 設定 ---------- */
-function renderSet(){$('#off').value=S.set.off;$('#gu').value=S.set.url;$('#gt').value=S.set.token;$('#bg').checked=!!S.set.bg;$('#se').checked=!!S.set.se;$('#auto').checked=!!S.set.auto;$('#ana2').checked=!!S.set.ana;
+function renderSet(){$('#off').value=S.set.off;renderAcct();$('#bg').checked=!!S.set.bg;$('#se').checked=!!S.set.se;$('#auto').checked=!!S.set.auto;$('#ana2').checked=!!S.set.ana;
  $('#keys').innerHTML=S.set.keys.map((k,i)=>`<button data-k="${i}">${i?i+'鍵':'SCR'}: ${k}</button>`).join('')}
 $('#keys').onclick=e=>{const i=e.target.dataset.k;if(i==null)return;e.target.textContent='…押して';const f=ev=>{ev.preventDefault();S.set.keys[i]=ev.code;removeEventListener('keydown',f,true);renderSet()};addEventListener('keydown',f,true)};
 $('#toSet').onclick=()=>{renderSet();show('set')};
-$('#sback').onclick=()=>{S.set.off=+$('#off').value||0;S.set.url=$('#gu').value.trim();S.set.token=$('#gt').value.trim();S.set.bg=+$('#bg').checked;S.set.se=+$('#se').checked;S.set.auto=+$('#auto').checked;S.set.ana=+$('#ana2').checked;LS('nr_set',S.set);show('sel')};
+$('#sback').onclick=()=>{S.set.off=+$('#off').value||0;S.set.bg=+$('#bg').checked;S.set.se=+$('#se').checked;S.set.auto=+$('#auto').checked;S.set.ana=+$('#ana2').checked;LS('nr_set',S.set);show('sel')};
+
+/* ---------- アカウント / 広告 ---------- */
+const adFree=()=>!!S.user; // ログイン中(=有効なIDだけがログインできる)は広告なし。期限切れ・未ログインは広告対象
+async function adGate(){if(adFree())return;/* ここに動画広告(ゲストのみ)を入れる。終わったらreturn */}
+function showLogin(msg){show('login');if(msg!==undefined)$('#lmsg').textContent=msg;$('#lguest').hidden=NEED_LOGIN}
+function logout(msg){TOK='';S.user=null;try{localStorage.removeItem('nr_tok')}catch(e){}if(API_URL&&NEED_LOGIN)showLogin(typeof msg==='string'?msg:'');else renderAcct()}
+function renderWho(){const w=$('#who');if(!w)return;if(!API_URL){w.textContent='';return}
+ if(S.user){w.textContent='ログイン中: '+S.user.id+'　広告なし(〜'+(S.user.exp||'無期限')+')'}else{w.innerHTML='ゲスト利用中(広告あり) <button id="whoin" style="padding:2px 8px">ログイン</button>';$('#whoin').onclick=()=>showLogin('')}}
+function renderAcct(){renderWho();const e=$('#acct');if(!e)return;if(!API_URL){e.innerHTML='<div style="opacity:.7">ログイン機能: オフ(config.js の API が空欄)</div>';return}
+ if(S.user){const d=S.user.dev;e.innerHTML=`<div>ログイン中: <b>${S.user.id}</b></div><div>利用期限: ${S.user.exp||'無期限'}　／　広告: なし(期限まで)</div>${d?`<div>登録端末: ${d.n} / ${d.max} 台</div>`:''}<div class="row"><button id="lout">ログアウト</button></div>`;$('#lout').onclick=()=>logout('ログアウトしました。')}
+ else{e.innerHTML='<div>ログインしていません(広告が表示されます)</div><div class="row"><button id="lin">ログイン</button></div>';$('#lin').onclick=()=>showLogin('')}}
+async function loadUser(){const m=await api('me');if(m&&m.id){S.user={id:m.id,exp:m.exp,dev:m.dev};return true}return false}
+$('#lgo').onclick=async()=>{const id=$('#lid').value.trim(),pw=$('#lpw').value;if(!id||!pw){$('#lmsg').textContent='IDとパスワードを入力してください。';return}
+ $('#lmsg').textContent='確認中…';const j=await api('login',null,{id,pw,dev:DEV,dn:devName()});
+ if(!j){$('#lmsg').textContent='サーバーに接続できません。通信を確認してください。';return}if(j.err){$('#lmsg').textContent=j.err;return}
+ TOK=j.token;LS('nr_tok',TOK);$('#lpw').value='';if(!await loadUser()){$('#lmsg').textContent='ログインに失敗しました。';return}await boot()};
+$('#lpw').onkeydown=e=>{if(e.key==='Enter')$('#lgo').click()};$('#lid').onkeydown=e=>{if(e.key==='Enter')$('#lpw').focus()};
+$('#lguest').onclick=async()=>{await boot()};
 
 /* ---------- 起動 ---------- */
-(async()=>{$('#tone').value=S.set.tone||'gtr';$('#tone').onchange=()=>{S.set.tone=$('#tone').value;LS('nr_set',S.set)};S.logs=LS('nr_logs')||[];const r=await api('getSongs');S.songs=r&&r.length?r.map(JSON.parse).reverse():(LS('nr_songs')||[]);
+async function boot(){const r=await api('getSongs');S.songs=r&&r.length?r.map(JSON.parse).reverse():(LS('nr_songs')||[]);
  const fj=await fetch('songs.json',{cache:'no-cache'}).then(r=>r.json()).catch(()=>[]);
  S.songs=[...fj.map(x=>({...x,fixed:1})),...S.songs.filter(x=>!fj.some(y=>y.id===x.id))];
- if(S.set.auto&&!S.songs.length)await addSong();renderList();show('sel')})();
+ if(S.set.auto&&!S.songs.length)await addSong();renderList();renderAcct();show('sel')}
+(async()=>{$('#tone').value=S.set.tone||'gtr';$('#tone').onchange=()=>{S.set.tone=$('#tone').value;LS('nr_set',S.set)};S.logs=LS('nr_logs')||[];
+ if(API_URL&&TOK)await loadUser();
+ if(API_URL&&NEED_LOGIN&&!S.user){if($('#login').hidden)showLogin(TOK?'':'');return}
+ await boot()})();
 </script></body></html>
