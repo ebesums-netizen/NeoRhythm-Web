@@ -18,7 +18,7 @@ canvas{width:100%;display:block;background:#000;touch-action:none}
 <div id="sel" class="scr"><h1>NeoRhythm Web</h1>
 <div class="row"><button class="p" id="gen">＋ AI自動曲追加</button><button id="toSet">設定</button>
 <select id="mode"><option>NORMAL</option><option>SURVIVAL</option><option>FOCUS</option><option value="AUTO">AUTO(自動演奏)</option></select>
-<select id="tone"><option value="gtr">音色:エレキギター</option><option value="saw">音色:スーパーソウ</option><option value="pluck">音色:シンセプラック</option><option value="bell">音色:ベル(FM)</option><option value="chip">音色:8bitチップ</option></select> 開始<input id="skip" type="number" value="0" min="0" style="width:70px">秒<span id="st"></span></div>
+<select id="tone"><option value="gtr">音色:エレキギター</option><option value="saw">音色:スーパーソウ</option><option value="pluck">音色:シンセプラック</option><option value="bell">音色:ベル(FM)</option><option value="chip">音色:8bitチップ</option><option value="edm">音色:EDMリード</option><option value="brass">音色:シンセブラス</option><option value="piano">音色:ピアノ</option><option value="epiano">音色:エレピ</option><option value="organ">音色:オルガン</option><option value="strings">音色:ストリングス</option><option value="choir">音色:コーラス(声)</option><option value="flute">音色:フルート</option><option value="marimba">音色:マリンバ</option><option value="harp">音色:ハープ</option><option value="musicbox">音色:オルゴール</option></select> 開始<input id="skip" type="number" value="0" min="0" style="width:70px">秒<span id="st"></span></div>
 <details class="card"><summary><b>＋ mp3曲を登録</b></summary>
 <label>タイトル <input id="mt" type="text"></label><label>アーティスト <input id="ma" type="text"></label>
 <label>BPM <input id="mb" type="number" step="0.01" style="width:100px"></label>
@@ -167,7 +167,39 @@ function gtr(f,ds){const B=bus(),t=AC.currentTime+(ds||0);B.dl.delayTime.value=.
  env.gain.setValueAtTime(0,t);env.gain.linearRampToValueAtTime(.45,t+.008);env.gain.exponentialRampToValueAtTime(.18,t+.15);env.gain.setTargetAtTime(0,t+.55,.18);
  o.connect(lp);o2.connect(lp);lp.connect(env);env.connect(cut);cut.connect(B.sh);const n=[o,o2,lfo],end=t+1.4;n.forEach(x=>{x.start(t);x.stop(end)});VO.push({cut,t,end,n})}
 /* 打鍵音の種類(曲選択画面で切替) */
-function tone(f,ds,ex){const k=S.set.tone||'gtr';if(k==='gtr'){guitar(f,ds,.12);return gtr(ex||f>=300?f:f*2,ds)}
+/* 追加音色 */
+/* 追加音色(エレピ/ピアノ/オルガン/ブラス/ストリングス/コーラス/フルート/マリンバ/ハープ/オルゴール/EDMリード) */
+const NV={epiano:1.968,piano:2.528,organ:1.899,brass:1.633,strings:2.146,choir:1.436,flute:1.112,marimba:1.696,harp:1.183,musicbox:2.255,edm:1.543};
+let NZ=null;
+function ntone(k,f,ds,ex){const B=bus(),t=AC.currentTime+(ds||0),F=ex?f:f*2,V=NV[k]||1,env=AC.createGain(),lp=AC.createBiquadFilter(),cut=AC.createGain(),os=[];let mono=0,dur=1.2;
+ lp.type='lowpass';lp.frequency.value=6000;B.dl.delayTime.value=.75*60/(G?G.song.bpm:150);
+ const mk=(ty,fr,dt,dst)=>{const o=AC.createOscillator();o.type=ty;o.frequency.value=fr;o.detune.value=dt||0;os.push(o);if(dst)o.connect(dst);return o},
+ gn=(v,dst)=>{const g=AC.createGain();g.gain.value=v;if(dst)g.connect(dst);return g},
+ att=(pk,a)=>{env.gain.setValueAtTime(0,t);env.gain.linearRampToValueAtTime(pk*V,t+a)},
+ rel=(t0,tc,lv)=>{env.gain.setValueAtTime(lv*V,t0);env.gain.setTargetAtTime(0,t0,tc)},
+ vib=(tg,dep,dl)=>{const lf=mk('sine',5.2),lg=gn(0);lg.gain.setValueAtTime(0,t);lg.gain.linearRampToValueAtTime(dep,t+dl);lf.connect(lg);tg.forEach(o=>lg.connect(o.detune))};
+ if(k==='epiano'){const c=mk('sine',F),m=mk('sine',F),mg=gn(0);mg.gain.setValueAtTime(F*1.6,t);mg.gain.exponentialRampToValueAtTime(F*.25,t+.7);m.connect(mg);mg.connect(c.frequency);c.connect(lp);
+  const tg=gn(0);tg.gain.setValueAtTime(.09,t);tg.gain.exponentialRampToValueAtTime(.0005,t+.06);mk('sine',F*14,0,tg);tg.connect(lp);lp.frequency.value=7000;
+  att(.5,.004);env.gain.exponentialRampToValueAtTime(.001*V,t+1.1);dur=1.2}
+ else if(k==='piano'){const sum=gn(1,lp);lp.frequency.value=5500;
+  for(let n=1;n<=7;n++){const fr=F*n*Math.sqrt(1+.0004*n*n);if(fr>9000)break;const a=Math.pow(n,-1.1)*(n===1?1:.9),T=1.15/(1+.55*(n-1)),g=AC.createGain();g.gain.setValueAtTime(0,t);g.gain.linearRampToValueAtTime(a,t+.003);g.gain.exponentialRampToValueAtTime(.0005,t+T);g.connect(sum);(n<3?[-3,3]:[0]).forEach(d=>mk('sine',fr,d,g))}
+  att(.2,.002);rel(t+1.0,.08,.2);dur=1.4}
+ else if(k==='organ'){[[1,1],[2,.8],[3,.5],[4,.4]].forEach(([m,a])=>mk('sine',F*m,0,gn(a,lp)));lp.frequency.value=7000;att(.2,.006);rel(t+.28,.06,.2);dur=.8;mono=1}
+ else if(k==='brass'){mk('sawtooth',F,-7,lp);mk('sawtooth',F,7,lp);lp.Q.value=1.5;lp.frequency.setValueAtTime(500,t);lp.frequency.linearRampToValueAtTime(3400,t+.07);lp.frequency.exponentialRampToValueAtTime(1500,t+.4);att(.3,.03);rel(t+.3,.08,.3);dur=.9;mono=1}
+ else if(k==='strings'){const o=[-14,-5,6,15].map(d=>mk('sawtooth',F,d,lp));vib(o,7,.3);lp.frequency.value=2600;att(.16,.07);rel(t+.38,.12,.16);dur=1;mono=1}
+ else if(k==='choir'){const src=gn(1);[-8,0,8].forEach(d=>mk('sawtooth',F,d,src));[[730,6,1],[1090,7,.7],[2440,8,.25]].forEach(([fq,q,a])=>{const bp=AC.createBiquadFilter();bp.type='bandpass';bp.frequency.value=fq;bp.Q.value=q;src.connect(bp);bp.connect(gn(a,lp))});lp.frequency.value=5000;att(.9,.05);rel(t+.35,.1,.9);dur=1;mono=1}
+ else if(k==='flute'){const a=mk('sine',F,0,gn(1,lp)),b=mk('sine',F*2,0,gn(.12,lp));vib([a,b],9,.25);
+  if(!NZ){const n=Math.floor(AC.sampleRate*.9),d=new Float32Array(n);for(let i=0;i<n;i++)d[i]=Math.random()*2-1;NZ=AC.createBuffer(1,n,AC.sampleRate);NZ.copyToChannel(d,0)}
+  const ns=AC.createBufferSource(),bp=AC.createBiquadFilter();ns.buffer=NZ;bp.type='bandpass';bp.frequency.value=Math.min(F*2,6000);bp.Q.value=1.5;ns.connect(bp);bp.connect(gn(.05,lp));ns.start(t);ns.stop(t+.8);
+  att(.5,.05);rel(t+.3,.06,.5);dur=.8;mono=1}
+ else if(k==='marimba'){mk('sine',F,0,lp);mk('sine',F*4,0,gn(.35,lp));const ck=gn(0,lp);ck.gain.setValueAtTime(.12,t);ck.gain.exponentialRampToValueAtTime(.0005,t+.03);mk('sine',F*10,0,ck);att(.75,.002);env.gain.exponentialRampToValueAtTime(.001*V,t+.45);dur=.6}
+ else if(k==='harp'){mk('triangle',F,0,lp);mk('sine',F*2,0,gn(.5,lp));mk('sine',F*3,0,gn(.25,lp));lp.frequency.setValueAtTime(4500,t);lp.frequency.exponentialRampToValueAtTime(1500,t+.5);att(.7,.003);env.gain.exponentialRampToValueAtTime(.001*V,t+1);dur=1.1}
+ else if(k==='musicbox'){mk('sine',F,0,lp);mk('sine',F*3,0,gn(.3,lp));mk('sine',F*5.4,0,gn(.12,lp));att(.55,.002);env.gain.exponentialRampToValueAtTime(.001*V,t+.7);dur=.8}
+ else{[-14,0,14].forEach(d=>mk('sawtooth',F,d,lp));mk('square',F,0,gn(.4,lp));mk('sawtooth',F*2,0,gn(.3,lp));lp.Q.value=1.2;lp.frequency.setValueAtTime(7500,t);lp.frequency.exponentialRampToValueAtTime(3000,t+.25);att(.28,.004);rel(t+.18,.06,.28);dur=.6;mono=1}
+ VO=VO.filter(v=>v.end>t);if(mono)for(const v of VO)if(v.t<t-.02&&!v.cutd){v.cutd=1;v.cut.gain.setValueAtTime(1,t);v.cut.gain.setTargetAtTime(0,t,.03);try{v.n.forEach(x=>x.stop(t+.2))}catch(e){}}
+ lp.connect(env);env.connect(cut);cut.connect(B.out);const end=t+dur;os.forEach(o=>{o.start(t);o.stop(end)});VO.push({cut,t,end,n:os})}
+
+function tone(f,ds,ex){const k=S.set.tone||'gtr';if(NV[k]!==undefined)return ntone(k,f,ds,ex);if(k==='gtr'){guitar(f,ds,.12);return gtr(ex||f>=300?f:f*2,ds)}
  const B=bus(),t=AC.currentTime+(ds||0),end=t+1.2,env=AC.createGain(),lp=AC.createBiquadFilter(),os=[];lp.type='lowpass';B.dl.delayTime.value=.75*60/(G?G.song.bpm:150);
  const mk=(ty,fr,dt)=>{const o=AC.createOscillator();o.type=ty;o.frequency.value=fr;o.detune.value=dt||0;os.push(o);return o},F=ex?f:f*2;
  if(k==='saw'){[-12,0,12].forEach(d=>mk('sawtooth',F,d).connect(lp));lp.frequency.value=4000;env.gain.setValueAtTime(0,t);env.gain.linearRampToValueAtTime(.22,t+.01);env.gain.setTargetAtTime(0,t+.18,.12)}
@@ -178,7 +210,7 @@ function tone(f,ds,ex){const k=S.set.tone||'gtr';if(k==='gtr'){guitar(f,ds,.12);
 /* 強拍の和音(ルート+5度+オクターブ)と、スクラッチのインパクト音 */
 function stab(r,ds){const B=bus(),t=AC.currentTime+(ds||0),fr=110*Math.pow(2,r/12),env=AC.createGain(),lp=AC.createBiquadFilter();lp.type='lowpass';lp.frequency.setValueAtTime(2400,t);lp.frequency.exponentialRampToValueAtTime(500,t+.35);
  env.gain.setValueAtTime(0,t);env.gain.linearRampToValueAtTime(.16,t+.01);env.gain.setTargetAtTime(0,t+.08,.12);
- [fr,fr*1.4983,fr*2].forEach(x=>{[-6,6].forEach(d=>{const o=AC.createOscillator();o.type='sawtooth';o.frequency.value=x;o.detune.value=d;o.connect(lp);o.start(t);o.stop(t+.6)})});lp.connect(env);env.connect(B.out)}
+ [fr,fr*1.4983,fr*2].forEach(x=>{[-6,6].forEach(d=>{const o=AC.createOscillator();o.type=({gtr:'sawtooth',saw:'sawtooth',pluck:'sawtooth',edm:'sawtooth',brass:'sawtooth',chip:'square'})[S.set.tone||'gtr']||'triangle';o.frequency.value=x;o.detune.value=d;o.connect(lp);o.start(t);o.stop(t+.6)})});lp.connect(env);env.connect(B.out)}
 function impact(r,ds){const t=AC.currentTime+(ds||0),f=55*Math.pow(2,(r||0)/12),o=AC.createOscillator(),g=AC.createGain();o.type='sine';o.frequency.setValueAtTime(f*3,t);o.frequency.exponentialRampToValueAtTime(f,t+.08);
  g.gain.setValueAtTime(.5,t);g.gain.exponentialRampToValueAtTime(.001,t+.45);o.connect(g);g.connect(AC.destination);o.start(t);o.stop(t+.5);
  const R=AC.sampleRate,n=Math.floor(R*.25),b=AC.createBuffer(1,n,R),d=b.getChannelData(0);for(let i=0;i<n;i++)d[i]=(Math.random()*2-1)*Math.pow(1-i/n,2);
