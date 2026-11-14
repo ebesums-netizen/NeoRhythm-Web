@@ -44,7 +44,7 @@ canvas{width:100%;display:block;background:#000;touch-action:none}
 <label><input type="checkbox" id="ana2"> プレイスタイル分析</label>
 <label>GAS API のURL(空欄ならこのブラウザ内に保存) <input id="gu" type="text" style="width:100%" placeholder="https://script.google.com/macros/s/.../exec"></label>
 <label>合言葉 <input id="gt" type="text"></label><div style="opacity:.6">URLや合言葉を変えたら、保存後にページを再読み込みしてください</div>
-<div>キーコンフィグ (押して変更) / スマホは画面タップ</div><div class="row" id="keys"></div>
+<div>キーコンフィグ (押して変更) / スマホは画面タップ</div><div class="row" id="keys"></div><div style="opacity:.7;font-size:12px;margin-top:4px">難易度ごとの使用キー: BEGINNER=3・4・5鍵(3列) / EASY=2・3・5・6鍵(4列) / NORMAL=2〜6鍵(5列) / HYPER=SCR+1〜7鍵(8列)。スマホは列をタップ。</div>
 <div class="row"><button class="p" id="sback">戻る</button></div></div>
 
 <script>
@@ -56,13 +56,22 @@ const show=id=>document.querySelectorAll('.scr').forEach(e=>e.hidden=e.id!==id);
 const rng=s=>()=>{s|=0;s=s+0x6D2B79F5|0;let t=Math.imul(s^s>>>15,1|s);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296};
 const SEC=[.12,.35,.5,.68,.8,1.01],DEN=[.3,.5,.75,1,.2,1.1],NM=['Nova','Pulse','Vortex','Aether','Quasar','Helix','Zenith'];
 const secOf=f=>SEC.findIndex(x=>f<x);
-let AC,G=null,cv,bufs={},lastP=null,cur={};
+let AC,G=null,cv,bufs={},lastP=null,cur={},LV={};
 
 /* ---------- AI自動曲追加 (ローカル生成エンジン; 外部AI APIに差替え可) ---------- */
 function learnBpm(){const l=S.logs.filter(x=>x.rate>.5);if(!l.length)return 0;let a=0,b=0;l.forEach(x=>{a+=x.bpm*x.rate;b+=x.rate});return Math.round(a/b+(Math.random()*10-5))}
 function genSong(){const seed=Math.floor(Math.random()*1e9),r=rng(seed),bpm=learnBpm()||135+Math.floor(r()*31);
  return{id:'ai_'+seed.toString(36),title:NM[seed%7]+' '+NM[(seed>>3)%7]+' '+seed%100,artist:'AI Composer',bpm:Math.max(135,Math.min(165,bpm)),
  duration:60+Math.floor(r()*31),seed,tags:['AI','Trance','Auto'],audioUrl:'',added:Date.now()}}
+/* 難易度: 列数・速度(落下時間ap秒。小さいほど速い)。HYPERの譜面を間引き・列圧縮して作る */
+const DIFFS={BEGINNER:{L:3,km:[3,4,5],ap:1.7,gap:.5},EASY:{L:4,km:[2,3,5,6],ap:1.45,gap:.28},NORMAL:{L:5,km:[2,3,4,5,6],ap:1.25,gap:.16},HYPER:{L:8,km:[0,1,2,3,4,5,6,7],ap:1.1}};
+function reduceChart(b,s,diff){if(diff==='HYPER')return b;const D=DIFFS[diff],u=60/s.bpm,off=s.offset||0,out=[];let lt=-9,ll=-1,rp=0;
+ for(const n of b.notes){const q=(n.time-off)/u*2,qi=Math.round(q);if(Math.abs(q-qi)>.25)continue;
+  if(diff==='BEGINNER'){if(qi%4!==0)continue}else if(diff==='EASY'){if(qi%2!==0)continue}else if(diff==='NORMAL'){if(qi%2!==0&&Math.floor(qi/2)%2!==0)continue}
+  if(n.time-lt<D.gap)continue;
+  let l=n.lane===0?Math.floor(D.L/2):Math.min(D.L-1,Math.max(0,Math.ceil(n.lane*D.L/7)-1));
+  if(l===ll&&rp>=2)l=(l+1)%D.L;rp=l===ll?rp+1:0;ll=l;lt=n.time;out.push({...n,lane:l,sl:n.lane})}
+ return{songId:b.songId,difficulty:diff,level:Math.max(1,Math.round(out.length/(s.duration||120)/1.5)),notes:out}}
 function genChart(s,diff,w){const r=rng(s.seed+({NORMAL:1,HYPER:7,PRACTICE:13}[diff]||1)),u=60/s.bpm/4,d={NORMAL:.55,HYPER:.9,PRACTICE:.75}[diff]||.6,notes=[];let last=-1;
  w=w||[0,1,1,1,1,1,1,1];
  for(let st=16;st*u<s.duration-2;st++){const f=st*u/s.duration,sec=secOf(f),den=DEN[sec]*d,hi=sec===3||sec===5;
@@ -89,10 +98,10 @@ async function getBuf(s){if(bufs[s.id])return bufs[s.id];
 /* ---------- 曲選択 ---------- */
 async function addSong(){const s=genSong();S.songs.unshift(s);persist();$('#st').textContent='生成: '+s.title;
  await api('saveSong',JSON.stringify(s));for(const d of['NORMAL','HYPER'])await api('saveChart',JSON.stringify(genChart(s,d)));renderList()}
-function renderList(){$('#list').innerHTML=S.songs.map(s=>{const f=S.fav.includes(s.id),lv=d=>genChart(s,d).level;
+function renderList(){$('#list').innerHTML=S.songs.map(s=>{const f=S.fav.includes(s.id),lv=d=>{const h=LV[s.id]||genChart(s,'HYPER').level;return d==='HYPER'?h:Math.max(1,Math.round(h*{BEGINNER:.25,EASY:.5,NORMAL:.75}[d]))};
  return`<div class="card"><b>${f?'★':'☆'} ${s.title}</b> <span style="opacity:.6">${s.artist}</span><div>BPM ${s.bpm} ・ ${s.duration}s ${s.tags.map(t=>`<span class="tag">${t}</span>`).join('')}</div>
  <div class="row"><button data-a="f" data-i="${s.id}">お気に入り</button><button data-a="v" data-i="${s.id}">試聴</button>
- <button class="p" data-a="p" data-i="${s.id}" data-d="NORMAL">NORMAL ☆${lv('NORMAL')}</button><button class="k" data-a="p" data-i="${s.id}" data-d="HYPER">HYPER ☆${lv('HYPER')}</button></div></div>`}).join('')}
+ <button data-a="p" data-i="${s.id}" data-d="BEGINNER">BEGINNER ☆${lv('BEGINNER')}</button><button data-a="p" data-i="${s.id}" data-d="EASY">EASY ☆${lv('EASY')}</button><button class="p" data-a="p" data-i="${s.id}" data-d="NORMAL">NORMAL ☆${lv('NORMAL')}</button><button class="k" data-a="p" data-i="${s.id}" data-d="HYPER">HYPER ☆${lv('HYPER')}</button></div></div>`}).join('');S.songs.forEach(s=>{if(s.chartUrl&&LV[s.id]===undefined){LV[s.id]=0;fetch(s.chartUrl).then(r=>r.json()).then(j=>{if(j&&j.level){LV[s.id]=j.level;renderList()}}).catch(()=>{})}})}
 $('#list').onclick=async e=>{const b=e.target.closest('button');if(!b)return;const s=S.songs.find(x=>x.id===b.dataset.i);AC=AC||new AudioContext();unlock();await AC.resume();
  if(b.dataset.a==='f'){S.fav=S.fav.includes(s.id)?S.fav.filter(x=>x!==s.id):[...S.fav,s.id];LS('nr_fav',S.fav);renderList()}
  if(b.dataset.a==='v'){$('#st').textContent='試聴準備中…';const bf=await getBuf(s),o=AC.createBufferSource();o.buffer=bf;o.connect(AC.destination);o.start(0,s.duration*.5,8);$('#st').textContent='試聴中 8秒'}
@@ -116,9 +125,9 @@ $('#madd').onclick=async()=>{AC=AC||new AudioContext();const f=$('#mf').files[0]
 /* ---------- プレイ ---------- */
 const now=()=>AC.currentTime-G.t0+G.sk-S.set.off/1000;
 async function start(song,diff,mode,w){AC=AC||new AudioContext();await AC.resume();const auto=mode==='AUTO',sk0=Math.max(0,Math.min(song.duration-5,+$('#skip').value||0));cur={song,diff,mode};if(auto)mode='NORMAL';
- const bf=await getBuf(song),cc=song.chartUrl&&diff==='HYPER'?await fetch(song.chartUrl).then(r=>r.json()).catch(()=>null):null,notes=(cc||genChart(song,diff,w)).notes.map(n=>({...n,d:0})),N=notes.length,src=AC.createBufferSource();src.buffer=bf;src.connect(AC.destination);
+ const bf=await getBuf(song),DD=DIFFS[diff],hb=DD&&song.chartUrl?await fetch(song.chartUrl).then(r=>r.json()).catch(()=>null):null,ch=DD?reduceChart(hb||genChart(song,'HYPER'),song,diff):genChart(song,diff,w),notes=ch.notes.map(n=>({...n,d:0})),N=notes.length,src=AC.createBufferSource();src.buffer=bf;src.connect(AC.destination);
  const t0=AC.currentTime+2;src.start(t0,sk0);notes.forEach(n=>{if(n.time<sk0)n.d=1});
- G={auto,sk:sk0,song,diff,mode,notes,N,t0,src,g:80/N,gauge:mode==='SURVIVAL'?100:mode==='FOCUS'?50:20,hist:[],cnt:{PERFECT:0,GREAT:0,GOOD:0,BAD:0,MISS:0},combo:0,max:0,score:0,miss:Array(8).fill(0),diffs:[],fl:Array(8).fill(0),msg:'',mt:0,fail:false};
+ G={auto,sk:sk0,song,diff,mode,notes,N,t0,src,g:80/N,gauge:mode==='SURVIVAL'?100:mode==='FOCUS'?50:20,hist:[],cnt:{PERFECT:0,GREAT:0,GOOD:0,BAD:0,MISS:0},combo:0,max:0,score:0,miss:Array(DD?DD.L:8).fill(0),diffs:[],fl:Array(DD?DD.L:8).fill(0),L:DD?DD.L:8,km:DD?DD.km:[0,1,2,3,4,5,6,7],ap:DD?DD.ap:1.1,msg:'',mt:0,fail:false};
  show('play');cv=$('#cv');cv.width=Math.min(innerWidth,760);cv.height=Math.round(innerHeight*.92);requestAnimationFrame(loop)}
 function judge(d){d=Math.abs(d);return d<=.0167?'PERFECT':d<=.0333?'GREAT':d<=.1167?'GOOD':d<=.25?'BAD':'MISS'}
 function apply(j,l,d){const c=G.cnt,g=G.g,T={NORMAL:{PERFECT:g,GREAT:g,GOOD:g/2,BAD:-3,MISS:-5},SURVIVAL:{PERFECT:.15,GREAT:.15,GOOD:0,BAD:-4,MISS:-8},FOCUS:{PERFECT:g*1.2,GREAT:g*1.2,GOOD:-.5,BAD:-6,MISS:-9}};
@@ -128,7 +137,7 @@ function apply(j,l,d){const c=G.cnt,g=G.g,T={NORMAL:{PERFECT:g,GREAT:g,GOOD:g/2,
  if(G.mode==='SURVIVAL'&&G.gauge<=0)G.fail=true}
 function hit(l){if(!G||G.done||G.auto)return;const t=now();let b=null;G.fl[l]=.6;
  for(const n of G.notes){if(n.time-t>.25)break;if(!n.d&&n.lane===l){const d=t-n.time;if(Math.abs(d)<=.25&&(!b||Math.abs(d)<Math.abs(b.d)))b={n,d}}}
- if(b){b.n.d=1;apply(judge(b.d),l,b.d);if(S.set.se)blip(l,b.n,G.song,b.d<0?-b.d:0)}}
+ if(b){b.n.d=1;apply(judge(b.d),l,b.d);if(S.set.se)blip(b.n.sl!==undefined?b.n.sl:l,b.n,G.song,b.d<0?-b.d:0)}}
 const SCL=[0,3,5,7,10,12,15],melo=st=>SCL[(st*3+(st>>4))%7];
 function lead(f){const t=AC.currentTime,g=AC.createGain();g.gain.setValueAtTime(.1,t);g.gain.exponentialRampToValueAtTime(.001,t+.25);g.connect(AC.destination);
  [-6,6].forEach(d=>{const o=AC.createOscillator();o.type='sawtooth';o.frequency.value=f;o.detune.value=d;o.connect(g);o.start(t);o.stop(t+.25)})}
@@ -177,23 +186,23 @@ function impact(r,ds){const t=AC.currentTime+(ds||0),f=55*Math.pow(2,(r||0)/12),
 function blip(l,n,s,ds){if(!l&&n.r!==undefined)return impact(n.r,ds);if(l&&n.p!==undefined&&n.r!==undefined){if(n.c)stab(n.r,ds);return tone(110*Math.pow(2,n.p/12),ds,1)}if(l){const k=s.key!=null?s.key:s.seed%7;let r=n.r;if(r===undefined)r=s.audioUrl||s.local?k:k+[0,0,3,0,5,0,7,3][Math.floor(n.time/(30/s.bpm))%8];const q=n.t!==undefined?n.t:3,iv=[0,q,7,12,12+q,19,24][l-1];const f=110*Math.pow(2,(r+iv)/12);return tone(f,ds)}const o=AC.createOscillator(),g=AC.createGain(),t=AC.currentTime;o.type=l?'triangle':'square';o.frequency.value=l?330*Math.pow(2,[0,2,4,7,9,12,14][l-1]/12):110;
  g.gain.setValueAtTime(.18,t);g.gain.exponentialRampToValueAtTime(.001,t+.1);o.connect(g);g.connect(AC.destination);o.start(t);o.stop(t+.1)}
 function loop(){if(!G)return;const t=now();
- if(G.auto)for(const n of G.notes){if(n.time-t>.12)break;if(!n.s){n.s=1;if(n.time-t>-.05&&S.set.se)blip(n.lane,n,G.song,Math.max(0,n.time-t))}if(!n.d&&t>=n.time){n.d=1;apply('PERFECT',n.lane,0)}}
+ if(G.auto)for(const n of G.notes){if(n.time-t>.12)break;if(!n.s){n.s=1;if(n.time-t>-.05&&S.set.se)blip(n.sl!==undefined?n.sl:n.lane,n,G.song,Math.max(0,n.time-t))}if(!n.d&&t>=n.time){n.d=1;apply('PERFECT',n.lane,0)}}
  for(const n of G.notes)if(!n.d&&t-n.time>.25){n.d=1;apply('MISS',n.lane,0)}
  draw(t);if(G.fail||t>G.song.duration+1.5)return end();requestAnimationFrame(loop)}
-function draw(t){const c=cv.getContext('2d'),W=cv.width,H=cv.height,lw=W/8,jy=H*.82,sp=jy/1.1,s=G.song;
+function draw(t){const c=cv.getContext('2d'),W=cv.width,H=cv.height,lw=W/G.L,jy=H*.82,sp=jy/G.ap,s=G.song;
  const pul=Math.max(0,1-((Math.max(t,0)*s.bpm/60)%1)*3);c.fillStyle=S.set.bg?`hsl(${(t*20+240)%360},50%,${5+5*pul}%)`:'#050510';c.fillRect(0,0,W,H);
- for(let l=0;l<8;l++){const x=l*lw,m=Math.min(.55,G.miss[l]*.05);c.fillStyle=`rgba(255,40,40,${m})`;c.fillRect(x,0,lw,H); // AIヒートマップ
+ for(let l=0;l<G.L;l++){const x=l*lw,m=Math.min(.55,G.miss[l]*.05);c.fillStyle=`rgba(255,40,40,${m})`;c.fillRect(x,0,lw,H); // AIヒートマップ
   if(G.fl[l]>0){c.fillStyle=`rgba(0,229,255,${G.fl[l]*.35})`;c.fillRect(x,0,lw,H);G.fl[l]-=.06}
   c.strokeStyle='#335';c.strokeRect(x,0,lw,H)}
- for(const n of G.notes){if(n.d)continue;const y=jy-(n.time-t)*sp;if(y<-20||y>H)continue;c.fillStyle=n.lane===0?'#ff2d95':n.lane%2?'#e8f0ff':'#00e5ff';c.fillRect(n.lane*lw+3,y-7,lw-6,14)}
+ for(const n of G.notes){if(n.d)continue;const y=jy-(n.time-t)*sp;if(y<-20||y>H)continue;c.fillStyle=G.L===8&&n.lane===0?'#ff2d95':n.lane%2?'#e8f0ff':'#00e5ff';c.fillRect(n.lane*lw+3,y-7,lw-6,14)}
  c.fillStyle='#ff0';c.fillRect(0,jy,W,3);
  const gc=G.mode==='NORMAL'?(G.gauge>=80?'#0f8':'#f55'):G.mode==='SURVIVAL'?'#f80':G.gauge>=70?'#fd0':'#0cf';c.fillStyle='#222';c.fillRect(0,0,W,12);c.fillStyle=gc;c.fillRect(0,0,W*G.gauge/100,12);
  c.fillStyle='#fff';c.font='bold 14px system-ui';c.textAlign='left';c.fillText(`${G.auto?'AUTO':G.mode} ${Math.round(G.gauge)}%${G.mode==='FOCUS'&&G.gauge>=70?' ★精度ボーナス×1.5':''}`,6,28);c.textAlign='right';c.fillText('SCORE '+G.score,W-6,28);
  c.textAlign='center';if(G.combo>1){c.font='bold 36px system-ui';c.fillStyle='#fff';c.fillText(G.combo,W/2,H*.4)}
  if(performance.now()-G.mt<500){c.font='bold 24px system-ui';c.fillStyle={PERFECT:'#0ff',GREAT:'#ff0',GOOD:'#0f8',BAD:'#f80',MISS:'#f33'}[G.msg];c.fillText(G.msg,W/2,H*.5)}
  if(t<0){c.fillStyle='#fff';c.font='20px system-ui';c.fillText('READY '+Math.ceil(-t),W/2,H*.3)}}
-addEventListener('keydown',e=>{if(e.repeat)return;const l=S.set.keys.indexOf(e.code);if(G&&l>=0){e.preventDefault();hit(l)}});
-$('#cv').addEventListener('pointerdown',e=>{const r=cv.getBoundingClientRect();hit(Math.min(7,Math.floor((e.clientX-r.left)/r.width*8)))});
+addEventListener('keydown',e=>{if(e.repeat)return;const ki=S.set.keys.indexOf(e.code);if(G&&ki>=0){const l=G.km.indexOf(ki);if(l>=0){e.preventDefault();hit(l)}}});
+$('#cv').addEventListener('pointerdown',e=>{const r=cv.getBoundingClientRect();if(G)hit(Math.min(G.L-1,Math.floor((e.clientX-r.left)/r.width*G.L)))});
 
 /* ---------- リザルト & プレイログ解析 ---------- */
 function end(){G.done=true;try{G.src.stop()}catch(e){}const c=G.cnt,ex=2*c.PERFECT+c.GREAT,r=ex/(2*G.N),
@@ -202,16 +211,16 @@ function end(){G.done=true;try{G.src.stop()}catch(e){}const c=G.cnt,ex=2*c.PERFE
  $('#rt').textContent=`${G.song.title} [${G.diff}/${G.mode}] ${ok?'CLEARED':'FAILED'}`;$('#dj').textContent='DJ LEVEL '+dj;
  $('#rs').innerHTML=`EX ${ex} / ${2*G.N} (${(r*100).toFixed(1)}%) ・ SCORE ${G.score} ・ MAX COMBO ${G.max}<br>`+Object.entries(c).map(([k,v])=>k+' '+v).join(' ・ ');
  const g=$('#gg').getContext('2d'),W=600,H=140;g.fillStyle='#000';g.fillRect(0,0,W,H);g.strokeStyle='#0ff';g.beginPath();G.hist.forEach((v,i)=>{const x=i/Math.max(1,G.hist.length-1)*W,y=H-v/100*H;i?g.lineTo(x,y):g.moveTo(x,y)});g.stroke();
- const mx=Math.max(1,...G.miss);G.miss.forEach((m,i)=>{g.fillStyle=`rgba(255,50,50,${.2+.8*m/mx})`;g.fillRect(i*W/8+4,H-10,W/8-8,8)});
- const avg=G.diffs.length?G.diffs.reduce((a,b)=>a+b,0)/G.diffs.length*1000:0,wl=G.miss.indexOf(mx),nm=['スクラッチ',...[1,2,3,4,5,6,7].map(i=>i+'鍵')];
+ const mx=Math.max(1,...G.miss);G.miss.forEach((m,i)=>{g.fillStyle=`rgba(255,50,50,${.2+.8*m/mx})`;g.fillRect(i*W/G.L+4,H-10,W/G.L-8,8)});
+ const avg=G.diffs.length?G.diffs.reduce((a,b)=>a+b,0)/G.diffs.length*1000:0,wl=G.miss.indexOf(mx),nm=G.L===8?['スクラッチ',...[1,2,3,4,5,6,7].map(i=>i+'鍵')]:G.miss.map((_,i)=>(i+1)+'列目');
  let m=[];if(Math.abs(avg)>6)m.push(`全体的に${avg>0?'遅め':'早め'}です(平均${avg.toFixed(1)}ms)。判定調整を${avg>0?'-':'+'}${Math.round(Math.abs(avg))}ms 程度に。`);else m.push('タイミングは安定しています。');
  if(mx>2)m.push(`ミスは${nm[wl]}レーンに集中(${mx}回)。練習譜面で強化しましょう。`);if(ok&&r<.85)m.push('GREAT以下を減らすとAA以上が狙えます。');
  $('#ana').hidden=!S.set.ana;$('#ana').innerHTML='<b>AIプレイ分析</b><br>'+m.join('<br>');
- lastP=G.miss.map(v=>1+v*3/mx);const log={at:Date.now(),songId:G.song.id,bpm:G.song.bpm,diff:G.diff,mode:G.mode,ex,rate:r,miss:G.miss};
+ if(G.L===8)lastP=G.miss.map(v=>1+v*3/mx);const log={at:Date.now(),songId:G.song.id,bpm:G.song.bpm,diff:G.diff,mode:G.mode,ex,rate:r,miss:G.miss};
  if(!G.auto)S.logs.push(log);LS('nr_logs',S.logs.slice(-200));if(!G.auto)api('saveLog',JSON.stringify(log));G=null;show('res')}
 $('#again').onclick=()=>start(cur.song,cur.diff,cur.mode);$('#back').onclick=()=>show('sel');
 $('#quit').onclick=()=>{if(G){G.done=true;try{G.src.stop()}catch(e){}G=null}show('sel')};
-$('#prac').onclick=()=>start(cur.song,'PRACTICE',cur.mode,[0,...lastP.slice(1)]);
+$('#prac').onclick=()=>{if(lastP)start(cur.song,'PRACTICE',cur.mode,[0,...lastP.slice(1)])};
 
 /* ---------- 設定 ---------- */
 function renderSet(){$('#off').value=S.set.off;$('#gu').value=S.set.url;$('#gt').value=S.set.token;$('#bg').checked=!!S.set.bg;$('#se').checked=!!S.set.se;$('#auto').checked=!!S.set.auto;$('#ana2').checked=!!S.set.ana;
